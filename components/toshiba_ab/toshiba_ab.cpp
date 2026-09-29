@@ -1599,11 +1599,21 @@ void ToshibaAbClimate::setup() {
   if (this->sensor_query_outstanding_) {
     const uint32_t now = millis();
     if (now - this->last_sensor_query_ms_ > this->sensor_query_timeout_ms_) {
+      this->sensor_query_timeouts_++;  // optional stat
+      // Log before resetting: last_sensor_query_id_ is the only record of
+      // which sensor went unanswered, and 0xFF is the "none" sentinel.
+      if (this->last_sensor_query_id_ == 0xFF) {
+        ESP_LOGW(TAG, "Sensor query timed out after %ums; clearing outstanding flag (id unknown, "
+                      "timeouts=%u)",
+                 static_cast<unsigned>(now - this->last_sensor_query_ms_), this->sensor_query_timeouts_);
+      } else {
+        ESP_LOGW(TAG, "Sensor query timed out after %ums; clearing outstanding flag (id=0x%02X, "
+                      "timeouts=%u)",
+                 static_cast<unsigned>(now - this->last_sensor_query_ms_), this->last_sensor_query_id_,
+                 this->sensor_query_timeouts_);
+      }
       this->sensor_query_outstanding_ = false;
       this->last_sensor_query_id_     = 0xFF;
-      this->sensor_query_timeouts_++;  // optional stat
-      ESP_LOGW(TAG, "Sensor query timed out; clearing outstanding flag (timeouts=%u)",
-               this->sensor_query_timeouts_);
     }
   }
 });
@@ -2268,7 +2278,9 @@ bool ToshibaAbClimate::receive_data_frame(const struct DataFrame *frame) {
         case 0x10: type_name = "HEARTBEAT"; break;
         case 0x11: type_name = "COMMAND"; break;
         case 0x15: type_name = "DATA_REQ"; break;
+        case 0x17: type_name = "SENSOR_REQ"; break;
         case 0x18: type_name = "ACK/DATA_RESP"; break;
+        case 0x1A: type_name = "SENSOR_RESP"; break;
         case 0x1C: type_name = "STATE_CHANGE"; break;
         case 0x55: type_name = "STATUS_SHORT"; break;
         case 0x58: type_name = "STATUS"; break;
